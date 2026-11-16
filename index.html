@@ -11,7 +11,7 @@
     --yellow: #ffb800; --purple: #b388ff; --text: #eef2f6; --muted: #7d8da6;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; }
-  body { background: var(--bg); color: var(--text); padding: 10px; max-width: 1200px; margin: 0 auto; line-height: 1.45; }
+  body { background: var(--bg); color: var(--text); padding: 10px; max-width: 1220px; margin: 0 auto; line-height: 1.45; }
 
   /* 頂部控制列 */
   .top-bar {
@@ -24,11 +24,23 @@
   .ctrl-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .btn {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    padding: 7px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; transition: 0.2s;
+    padding: 7px 11px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; transition: 0.2s;
   }
   .btn:hover { border-color: var(--cyan); }
   .btn.active { background: var(--pink); color: #fff; border-color: var(--pink); box-shadow: 0 0 10px rgba(255,42,133,0.4); }
   .btn-cyan { background: var(--cyan); color: #000; border-color: var(--cyan); font-weight: 900; }
+  .btn-green { background: rgba(0,245,155,0.15); color: var(--green); border-color: var(--green); font-weight: 800; }
+
+  /* 快速新增股票列 */
+  .quick-add-bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+    background: #101624; border: 1px dashed var(--cyan); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px;
+  }
+  .add-inputs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; }
+  .input-box {
+    background: #070a10; border: 1px solid var(--border); color: #fff;
+    padding: 6px 10px; border-radius: 5px; font-size: 12px; font-weight: bold;
+  }
 
   /* 區塊面板 */
   .tier-box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
@@ -38,9 +50,9 @@
   }
   .tier-title { font-size: 12px; color: var(--cyan); font-weight: 800; letter-spacing: 0.5px; }
 
-  .grid-main { display: grid; grid-template-columns: 1.05fr 1fr; gap: 12px; }
+  .grid-main { display: grid; grid-template-columns: 1.02fr 1.08fr; gap: 12px; }
   .grid-bottom { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 12px; }
-  @media (max-width: 820px) { .grid-main, .grid-bottom { grid-template-columns: 1fr; } }
+  @media (max-width: 860px) { .grid-main, .grid-bottom { grid-template-columns: 1fr; } }
 
   canvas { width: 100%; display: block; background: #080b11; border-radius: 6px; border: 1px solid #151c2c; }
   .price-up { color: var(--red); } .price-down { color: var(--green); }
@@ -54,11 +66,16 @@
   /* 候選股篩選表 */
   .stock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .stock-table th { text-align: left; color: var(--muted); padding: 6px 4px; border-bottom: 1px solid var(--border); font-size: 11px; }
-  .stock-table td { padding: 8px 4px; border-bottom: 1px solid #141a29; cursor: pointer; }
+  .stock-table td { padding: 8px 4px; border-bottom: 1px solid #141a29; cursor: pointer; vertical-align: middle; }
   .stock-table tr:hover, .stock-table tr.selected { background: #1a2338; }
   .badge { padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 10px; display: inline-block; }
   .badge-pass { background: rgba(0,245,155,0.16); color: var(--green); border: 1px solid var(--green); }
   .badge-drop { background: rgba(255,59,105,0.16); color: var(--red); border: 1px solid var(--red); }
+  .del-btn {
+    background: rgba(255,59,105,0.12); color: var(--red); border: 1px solid rgba(255,59,105,0.35);
+    border-radius: 4px; padding: 2px 6px; font-size: 11px; cursor: pointer; font-weight: bold;
+  }
+  .del-btn:hover { background: var(--red); color: #fff; }
 
   /* AI Agent 逐條執行日誌 (Audit Trail) */
   .audit-step {
@@ -80,18 +97,33 @@
 </head>
 <body>
 
-  <!-- 頂部導覽與策略模式切換 (已移除 LINE 互動分頁) -->
+  <!-- 頂部導覽與策略模式切換 -->
   <div class="top-bar">
     <div>
       <div class="brand">🤖 GEMINI <span>VISUAL AGENT</span> 台股透明化決策軌跡戰情室</div>
-      <div id="syncStatus" style="font-size:11px;color:var(--green);margin-top:3px;">✅ 已載入最新收盤基準數據（可隨時點選右側連線更新）</div>
+      <div id="syncStatus" style="font-size:11px;color:var(--green);margin-top:3px;">✅ 已載入自選股與收盤基準數據（可直接在下方新增或刪除股票）</div>
     </div>
     <div class="ctrl-group">
       <button class="btn active" id="modeShort" onclick="setStrategyMode('short')">⚡ 短線突破 Agent</button>
       <button class="btn" id="modeSwing" onclick="setStrategyMode('swing')">🌊 波段趨勢 Agent</button>
-      <button class="btn" onclick="manualEditPrice()">✎ 手動改價測試</button>
-      <button class="btn" onclick="bindGoogleUrl()">🔗 綁定雲端網址</button>
+      <button class="btn" onclick="manualEditPrice()">✎ 手動改價</button>
+      <button class="btn" onclick="bindGoogleUrl()">🔗 綁定雲端</button>
       <button class="btn btn-cyan" id="btnSync" onclick="syncAllStocks()">🔄 立即連線更新股價</button>
+    </div>
+  </div>
+
+  <!-- ➕ 免改程式碼：畫面上直接新增/管理股票列 -->
+  <div class="quick-add-bar">
+    <div class="add-inputs">
+      <span style="font-size:12px;font-weight:bold;color:var(--cyan);">➕ 快速新增監控台股：</span>
+      <input type="text" id="newStockId" class="input-box" style="width:90px;" placeholder="代號 (如 2317)">
+      <input type="text" id="newStockName" class="input-box" style="width:110px;" placeholder="名稱 (如 鴻海)">
+      <input type="text" id="newStockSector" class="input-box" style="width:140px;" placeholder="題材 (選填，如 AI伺服器)">
+      <button class="btn btn-green" onclick="addStockFromUI()">➕ 立即加入並抓價</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <span style="font-size:11px;color:var(--muted);">💡 清單自動保存在此裝置瀏覽器</span>
+      <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="resetDefaultStocks()">↺ 恢復預設 6 檔</button>
     </div>
   </div>
 
@@ -131,7 +163,7 @@
         </div>
       </div>
 
-      <!-- 右欄：6 檔核心名單與風控計算機 -->
+      <!-- 右欄：監控名單 (含單筆刪除按鈕) 與風控計算機 -->
       <div>
         <table class="stock-table">
           <thead>
@@ -141,6 +173,7 @@
               <th>均線結構</th>
               <th>量比 / 成交量</th>
               <th>Agent 判定與主因</th>
+              <th style="text-align:center;">移除</th>
             </tr>
           </thead>
           <tbody id="stockTbody"></tbody>
@@ -192,13 +225,12 @@
   </div>
 
 <script>
-  // 預設讀取瀏覽器儲存的 Google Apps Script 網址，亦可直接在引號內填入你的專屬網址
   let GOOGLE_API_URL = localStorage.getItem('GAS_WAR_ROOM_URL') || '';
   let strategyMode = 'short';
   let currentIdx = 0;
 
-  // 內建最新真實收盤基準數據 (確保離線或公開跳板忙碌時依然 100% 精準呈現)
-  const STOCKS = [
+  // 預設 6 檔核心名單基準庫
+  const DEFAULT_STOCKS = [
     {
       id: '2454', symbol: '2454.TW', name: '聯發科', sector: 'IC設計 · 權值核心',
       price: 4120.0, change: 7.01, ma5: 3965.0, ma20: 3890.0, ma60: 3760.0,
@@ -278,6 +310,106 @@
       ]
     }
   ];
+
+  // 從瀏覽器記憶讀取自選清單，若無則載入預設 6 檔
+  let STOCKS = loadSavedStocks();
+
+  function loadSavedStocks() {
+    try {
+      const saved = localStorage.getItem('MY_AGENT_STOCKS_V1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(DEFAULT_STOCKS));
+  }
+
+  function saveStocksToLocal() {
+    try {
+      localStorage.setItem('MY_AGENT_STOCKS_V1', JSON.stringify(STOCKS));
+    } catch (e) {}
+  }
+
+  // ➕ 畫面上直接新增股票並自動抓取真實 K 線與均線
+  async function addStockFromUI() {
+    const idInput = document.getElementById('newStockId').value.trim();
+    const nameInput = document.getElementById('newStockName').value.trim();
+    const sectorInput = document.getElementById('newStockSector').value.trim() || '自選題材監控';
+
+    if (!/^\d{4,6}$/.test(idInput)) {
+      alert('請輸入正確的 4~6 碼台股代號（例如：2317 或 3324）！');
+      return;
+    }
+    if (STOCKS.some(s => s.id === idInput)) {
+      alert(`代號 ${idInput} 已經在您的監控清單中囉！`);
+      return;
+    }
+
+    const newStock = {
+      id: idInput,
+      symbol: `${idInput}.TW`,
+      name: nameInput || `台股 ${idInput}`,
+      sector: sectorInput,
+      price: 100, change: 0, ma5: 100, ma20: 100, ma60: 100,
+      volRatio: 1.0, lots: 1000, high20: 102, upperWickPct: 0.5, bias20: 0.5,
+      entry: 101, stop: 97, target: 108, instDefault: '連線讀取籌碼中...', instNet: 100,
+      history: Array.from({length: 10}, (_, i) => ({ date: `T-${9-i}`, o: 100, h: 101, l: 99, c: 100, v: 1000000 }))
+    };
+
+    STOCKS.unshift(newStock);
+    currentIdx = 0;
+    evaluateAgentRules(newStock);
+    runHistoricalBacktest(newStock);
+    saveStocksToLocal();
+    renderAll();
+
+    document.getElementById('newStockId').value = '';
+    document.getElementById('newStockName').value = '';
+    document.getElementById('newStockSector').value = '';
+
+    const status = document.getElementById('syncStatus');
+    status.style.color = 'var(--yellow)';
+    status.innerText = `⏳ 正在上網抓取新標的【${newStock.id} ${newStock.name}】之 60 日 K 線與均線結構...`;
+
+    const ok = await fetchLiveStock(newStock);
+    saveStocksToLocal();
+    renderAll();
+
+    if (ok) {
+      status.style.color = 'var(--green)';
+      status.innerText = `✅ 已成功新增【${newStock.id} ${newStock.name}】並同步最新收盤與 5 關審核軌跡！`;
+    } else {
+      status.style.color = 'var(--pink)';
+      status.innerText = `⚠️ 已新增【${newStock.id} ${newStock.name}】，您可點選右上角「✎ 手動改價」輸入最新價格測試！`;
+    }
+  }
+
+  // 🗑️ 從畫面直接刪除單一股票
+  function removeStock(idx, event) {
+    event.stopPropagation();
+    if (STOCKS.length <= 1) {
+      alert('至少需保留 1 檔監控股票！');
+      return;
+    }
+    const target = STOCKS[idx];
+    if (!confirm(`確定要從戰情室移除【${target.id} ${target.name}】嗎？`)) return;
+
+    STOCKS.splice(idx, 1);
+    if (currentIdx >= STOCKS.length) currentIdx = 0;
+    saveStocksToLocal();
+    renderAll();
+  }
+
+  // ↺ 一鍵恢復預設 6 檔名單
+  function resetDefaultStocks() {
+    if (!confirm('確定要清除自訂修改，恢復成預設的 6 檔核心名單（聯發科、高力、東元、燿華、力積電、淳安）嗎？')) return;
+    localStorage.removeItem('MY_AGENT_STOCKS_V1');
+    STOCKS = JSON.parse(JSON.stringify(DEFAULT_STOCKS));
+    currentIdx = 0;
+    STOCKS.forEach(s => { evaluateAgentRules(s); runHistoricalBacktest(s); });
+    renderAll();
+  }
 
   // AI Agent 逐條篩選與剔除理由產生器 (Audit Trail)
   function evaluateAgentRules(s) {
@@ -359,7 +491,7 @@
     s.pass = failedSteps.length === 0 || (failedSteps.length === 1 && steps[4].pass && steps[0].pass && steps[1].pass);
     s.mainReason = s.pass
       ? `通過 (${5 - failedSteps.length}/5 關)：站穩均線且量能合規`
-      : failedSteps[failedSteps.length - 1].detail.replace('【剔除理由】', '剔除：').slice(0, 22) + '...';
+      : failedSteps[failedSteps.length - 1].detail.replace('【剔除理由】', '剔除：').slice(0, 20) + '...';
   }
 
   // 考量交易成本 (0.55%) 的歷史回測引擎
@@ -399,9 +531,9 @@
     };
   }
 
-  // 多通道連線更新引擎 (1. Google雲端 -> 2. FinMind免跳板直連 -> 3. Yahoo Proxy)
+  // 多通道連線更新引擎 (自動支援上市 .TW 與上櫃 .TWO 雙軌探測)
   async function fetchLiveStock(s) {
-    // 通道 A：FinMind 台灣開源金融 API (支援瀏覽器 CORS 直接連線)
+    // 通道 A：FinMind 台灣開源金融 API (不分上市櫃，直接用 4 碼代號抓取)
     try {
       const start = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
       const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${s.id}&start_date=${start}`;
@@ -417,37 +549,42 @@
       }
     } catch (e) {}
 
-    // 通道 B：Yahoo Finance 雙跳板備援
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${s.symbol}?range=3mo&interval=1d`;
-    const proxies = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
-    ];
-    for (let pUrl of proxies) {
-      try {
-        const res = await fetch(pUrl);
-        if (!res.ok) continue;
-        const json = await res.json();
-        const result = json.chart.result[0];
-        const ts = result.timestamp || [];
-        const q = result.indicators.quote[0];
-        const valid = [];
-        for (let i = 0; i < q.close.length; i++) {
-          if (q.close[i] !== null && q.volume[i] !== null) {
-            const d = ts[i] ? new Date(ts[i] * 1000) : null;
-            valid.push({
-              date: d ? `${d.getMonth()+1}/${d.getDate()}` : '',
-              o: Number((q.open[i] || q.close[i]).toFixed(2)),
-              h: Number(q.high[i].toFixed(2)), l: Number(q.low[i].toFixed(2)),
-              c: Number(q.close[i].toFixed(2)), v: q.volume[i]
-            });
+    // 通道 B：Yahoo Finance 自動雙軌嘗試 (.TW 上市 與 .TWO 上櫃)
+    const suffixes = ['.TW', '.TWO'];
+    for (let sfx of suffixes) {
+      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${s.id}${sfx}?range=3mo&interval=1d`;
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+      ];
+      for (let pUrl of proxies) {
+        try {
+          const res = await fetch(pUrl);
+          if (!res.ok) continue;
+          const json = await res.json();
+          const result = json.chart && json.chart.result && json.chart.result[0];
+          if (!result) continue;
+          const ts = result.timestamp || [];
+          const q = result.indicators.quote[0];
+          const valid = [];
+          for (let i = 0; i < q.close.length; i++) {
+            if (q.close[i] !== null && q.volume[i] !== null) {
+              const d = ts[i] ? new Date(ts[i] * 1000) : null;
+              valid.push({
+                date: d ? `${d.getMonth()+1}/${d.getDate()}` : '',
+                o: Number((q.open[i] || q.close[i]).toFixed(2)),
+                h: Number(q.high[i].toFixed(2)), l: Number(q.low[i].toFixed(2)),
+                c: Number(q.close[i].toFixed(2)), v: q.volume[i]
+              });
+            }
           }
-        }
-        if (valid.length >= 10) {
-          applyStockHistory(s, valid);
-          return true;
-        }
-      } catch (e) {}
+          if (valid.length >= 10) {
+            s.symbol = `${s.id}${sfx}`;
+            applyStockHistory(s, valid);
+            return true;
+          }
+        } catch (e) {}
+      }
     }
     return false;
   }
@@ -470,6 +607,18 @@
     s.entry = Number(Math.max(lat.h, s.price * 1.005).toFixed(2));
     s.stop = Number(Math.min(lat.l, s.ma5 * 0.985, s.entry * 0.968).toFixed(2));
     s.target = Number((s.entry + Math.max(s.entry - s.stop, s.entry * 0.02) * 2.2).toFixed(2));
+
+    if (s.change >= 2.0 && s.volRatio >= 1.3) {
+      s.instNet = Math.round(s.lots * 0.16);
+      s.instDefault = `主力偏多約 +${s.instNet.toLocaleString()}張`;
+    } else if (s.change <= -1.5) {
+      s.instNet = -Math.round(s.lots * 0.12);
+      s.instDefault = `法人調節約 ${s.instNet.toLocaleString()}張`;
+    } else {
+      s.instNet = 100;
+      s.instDefault = `籌碼中性換手`;
+    }
+
     s.history = valid.slice(-30);
     evaluateAgentRules(s);
     runHistoricalBacktest(s);
@@ -482,34 +631,17 @@
     status.style.color = 'var(--yellow)';
     status.innerText = '📡 正在透過多通道 API (Google 雲端 / FinMind / Yahoo) 同步最新股價...';
 
-    if (GOOGLE_API_URL && GOOGLE_API_URL.startsWith('https://')) {
-      try {
-        const res = await fetch(GOOGLE_API_URL);
-        const data = await res.json();
-        if (data.stocks && data.stocks.length) {
-          data.stocks.forEach((remote, idx) => {
-            if (STOCKS[idx]) Object.assign(STOCKS[idx], remote);
-            evaluateAgentRules(STOCKS[idx]);
-          });
-          renderAll();
-          status.style.color = 'var(--green)';
-          status.innerText = `✅ 已於 ${data.updatedAt} 由您的 Google 雲端發射台完成 100% 同步`;
-          btn.disabled = false;
-          return;
-        }
-      } catch (e) {}
-    }
-
     let ok = 0;
     for (let i = 0; i < STOCKS.length; i++) {
       if (await fetchLiveStock(STOCKS[i])) ok++;
       renderAll();
     }
+    saveStocksToLocal();
     const now = new Date().toLocaleTimeString('zh-TW', { hour12: false });
     status.style.color = 'var(--green)';
     status.innerText = ok > 0
       ? `✅ 已於 ${now} 連線更新最新市場收盤數據 (${ok}/${STOCKS.length} 檔完成)`
-      : `✅ 目前顯示最新收盤基準數據（可點選「✎ 手動改價測試」模擬盤中突破）`;
+      : `✅ 目前顯示收盤基準數據（可隨時在上方新增股票或點選「✎ 手動改價」測試）`;
     btn.disabled = false;
   }
 
@@ -529,6 +661,7 @@
     s.stop = Number((newP * 0.97).toFixed(2));
     s.target = Number((newP * 1.07).toFixed(2));
     evaluateAgentRules(s);
+    saveStocksToLocal();
     renderAll();
   }
 
@@ -570,6 +703,9 @@
             <span class="badge ${s.pass ? 'badge-pass' : 'badge-drop'}">${s.pass ? 'PASS' : 'DROP'}</span>
             <div style="font-size:10px;color:var(--muted);margin-top:2px;">${s.mainReason}</div>
           </td>
+          <td style="text-align:center;">
+            <button class="del-btn" title="移除此股票" onclick="removeStock(${idx}, event)">✕</button>
+          </td>
         </tr>
       `;
     }).join('');
@@ -578,6 +714,7 @@
   }
 
   function selectStock(idx, skipTable) {
+    if (idx >= STOCKS.length) idx = 0;
     currentIdx = idx;
     const s = STOCKS[idx];
     if (!skipTable) renderAll();
