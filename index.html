@@ -19,7 +19,7 @@
     background: linear-gradient(90deg, #190a19 0%, #0d121d 55%, #09192b 100%);
     border: 2px solid var(--pink); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; gap: 10px;
   }
-  .brand { font-weight: 900; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .brand { font-weight: 900; font-size: 17px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .brand span { color: var(--pink); }
   .market-tag {
     font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 800;
@@ -112,14 +112,14 @@
         🤖 GEMINI <span>INTRADAY AGENT</span> 台股盤中即時決策戰情室
         <span id="marketPhaseTag" class="market-tag">盤後收盤模式</span>
       </div>
-      <div id="syncStatus" style="font-size:11px;color:var(--green);margin-top:3px;">✅ 已就緒：支援盤中 Yahoo 即時報價 + 動態預估量比換算</div>
+      <div id="syncStatus" style="font-size:11px;color:var(--green);margin-top:3px;">✅ 已就緒：支援 Google 雲端 ?ids= 動態清單併發同步 + 預估量換算</div>
     </div>
     <div class="ctrl-group">
       <button class="btn active" id="modeShort" onclick="setStrategyMode('short')">⚡ 短線突破 Agent</button>
       <button class="btn" id="modeSwing" onclick="setStrategyMode('swing')">🌊 波段趨勢 Agent</button>
       <button class="btn" id="btnAutoRefresh" onclick="toggleAutoRefresh()">⏱️ 開啟盤中 30秒自動盯盤</button>
       <button class="btn" onclick="manualEditPrice()">✎ 盤中模擬改價</button>
-      <button class="btn" onclick="bindGoogleUrl()">🔗 綁定雲端</button>
+      <button class="btn" id="btnCloudBind" onclick="bindGoogleUrl()">🔗 綁定雲端</button>
       <button class="btn btn-cyan" id="btnSync" onclick="syncAllStocks()">🔄 立即抓取即時報價</button>
     </div>
   </div>
@@ -128,9 +128,9 @@
   <div class="quick-add-bar">
     <div class="add-inputs">
       <span style="font-size:12px;font-weight:bold;color:var(--cyan);">➕ 快速新增盤中監控台股：</span>
-      <input type="text" id="newStockId" class="input-box" style="width:90px;" placeholder="代號 (如 2317)">
-      <input type="text" id="newStockName" class="input-box" style="width:110px;" placeholder="名稱 (如 鴻海)">
-      <input type="text" id="newStockSector" class="input-box" style="width:140px;" placeholder="題材 (選填，如 AI伺服器)">
+      <input type="text" id="newStockId" class="input-box" style="width:95px;" placeholder="代號 (如 2317)">
+      <input type="text" id="newStockName" class="input-box" style="width:110px;" placeholder="名稱 (選填，如 鴻海)">
+      <input type="text" id="newStockSector" class="input-box" style="width:145px;" placeholder="題材 (選填，如 AI伺服器)">
       <button class="btn btn-green" onclick="addStockFromUI()">➕ 立即加入並抓價</button>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
@@ -182,7 +182,7 @@
             <tr>
               <th>標的</th>
               <th>即時價 (漲跌)</th>
-              <th>盘中位置 / 均線</th>
+              <th>盤中位置 / 均線</th>
               <th>預估量比 (現量)</th>
               <th>Agent 即時判定</th>
               <th style="text-align:center;">移除</th>
@@ -237,6 +237,7 @@
   </div>
 
 <script>
+  // 自動讀取您透過「🔗 綁定雲端」儲存的網址，或直接寫在下方引號內
   let GOOGLE_API_URL = localStorage.getItem('GAS_WAR_ROOM_URL') || '';
   let strategyMode = 'short';
   let currentIdx = 0;
@@ -249,7 +250,7 @@
     const twTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
     const day = twTime.getDay();
     const mins = twTime.getHours() * 60 + twTime.getMinutes();
-    const openMins = 9 * 60;       // 09:00
+    const openMins = 9 * 60;        // 09:00
     const closeMins = 13 * 60 + 30; // 13:30
 
     const isWeekday = day >= 1 && day <= 5;
@@ -258,8 +259,7 @@
     if (!isIntraday) {
       return { isIntraday: false, multiplier: 1.0, label: '盤後收盤數據 (1:1 實際成交量)' };
     }
-    const elapsed = Math.max(mins - openMins, 5); // 避免剛開盤前5分鐘乘數無限大
-    // 早盤前 30 分鐘通常成交量較集中，採用平滑權重公式估算全場總量
+    const elapsed = Math.max(mins - openMins, 5);
     const rawRatio = 270 / elapsed;
     const smoothMultiplier = Number(Math.min(Math.max(rawRatio * 0.82, 1.0), 12.0).toFixed(2));
     return {
@@ -369,6 +369,19 @@
     try { localStorage.setItem('MY_AGENT_STOCKS_V2', JSON.stringify(STOCKS)); } catch (e) {}
   }
 
+  function updateCloudButtonState() {
+    const btn = document.getElementById('btnCloudBind');
+    if (GOOGLE_API_URL && GOOGLE_API_URL.startsWith('https://')) {
+      btn.innerText = '🟢 雲端已綁定';
+      btn.style.borderColor = 'var(--green)';
+      btn.style.color = 'var(--green)';
+    } else {
+      btn.innerText = '🔗 綁定雲端';
+      btn.style.borderColor = 'var(--border)';
+      btn.style.color = 'var(--text)';
+    }
+  }
+
   // ⏱️ 切換盤中 30 秒自動刷新盯盤模式
   function toggleAutoRefresh() {
     const btn = document.getElementById('btnAutoRefresh');
@@ -392,7 +405,7 @@
     }, 1000);
   }
 
-  // ➕ 畫面上直接新增股票並自動抓取即時報價
+  // ➕ 畫面上直接新增股票並自動抓取即時報價（優先走 Google 雲端 ?ids= 通道）
   async function addStockFromUI() {
     const idInput = document.getElementById('newStockId').value.trim();
     const nameInput = document.getElementById('newStockName').value.trim();
@@ -426,9 +439,8 @@
     document.getElementById('newStockName').value = '';
     document.getElementById('newStockSector').value = '';
 
-    await fetchLiveStock(newStock);
-    saveStocksToLocal();
-    renderAll();
+    // 直接觸發全清單同步（若已綁定雲端，會自動透過 ?ids= 把這檔新股票抓回來）
+    await syncAllStocks();
   }
 
   function removeStock(idx, event) {
@@ -452,11 +464,9 @@
 
   // AI Agent 盤中即時 5 關審核與觸價訊號引擎
   function evaluateAgentRules(s) {
-    const intra = getTaiwanIntradayInfo();
     const estLots = s.estLots || s.lots;
     const steps = [];
 
-    // 判斷盤中即時價位訊號
     if (s.price >= s.entry) {
       s.intradaySignal = `🔥 已突破進場價 (${s.entry})`;
     } else if (s.price <= s.stop) {
@@ -584,8 +594,8 @@
     };
   }
 
-  // 盤中優先抓取 Yahoo Chart API (包含盤中最新 regularMarketPrice 與當日即時 K 棒)
-  async function fetchLiveStock(s) {
+  // 備援單筆抓價引擎（當尚未綁定 Google 雲端網址時自動啟用）
+  async function fetchLiveStockFallback(s) {
     const suffixes = ['.TW', '.TWO'];
     for (let sfx of suffixes) {
       const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${s.id}${sfx}?range=3mo&interval=1d`;
@@ -616,7 +626,6 @@
             }
           }
           if (valid.length >= 10) {
-            // 若 Yahoo meta 有提供盤中最新即時價，覆蓋最後一根 K 棒收盤價
             if (meta.regularMarketPrice) {
               valid[valid.length - 1].c = Number(meta.regularMarketPrice.toFixed(2));
               if (meta.regularMarketDayHigh) valid[valid.length - 1].h = Number(meta.regularMarketDayHigh.toFixed(2));
@@ -631,7 +640,6 @@
       }
     }
 
-    // 備援通道：FinMind 歷史日 K
     try {
       const start = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
       const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${s.id}&start_date=${start}`;
@@ -661,14 +669,12 @@
     s.ma20 = avg(valid.slice(-Math.min(20, valid.length)));
     s.ma60 = avg(valid.slice(-Math.min(60, valid.length)));
 
-    // 關鍵：用前 5 個完整交易日的均量作為分母，並將今日盤中量乘上「時間預估權重」
     const avgV5 = valid.slice(-6, -1).reduce((a, b) => a + b.v, 0) / 5;
     s.lots = Math.round(lat.v / 1000);
     s.estLots = Math.round(s.lots * intra.multiplier);
     const estVol = lat.v * intra.multiplier;
     s.volRatio = avgV5 > 0 ? Number((estVol / avgV5).toFixed(1)) : 1.0;
 
-    // 突破價以前一日高點與5日高點為基準，使盤中能清楚判斷「是否已突破」
     const prevHigh5 = Math.max(...valid.slice(-6, -1).map(d => d.h));
     s.high20 = Math.max(...valid.slice(-10).map(d => d.h));
     s.upperWickPct = Number((((lat.h - Math.max(lat.o, lat.c)) / lat.c) * 100).toFixed(2));
@@ -691,12 +697,14 @@
     runHistoricalBacktest(s);
   }
 
+  // 🚀 核心同步引擎：優先透過 ?ids= 將畫面上的自選股傳給 Google 雲端併發抓取
   async function syncAllStocks() {
     const intra = getTaiwanIntradayInfo();
     const phaseTag = document.getElementById('marketPhaseTag');
     phaseTag.innerText = intra.isIntraday ? '🟢 盤中即時雷達連線中' : '🌙 盤後收盤基準模式';
     phaseTag.className = intra.isIntraday ? 'market-tag live' : 'market-tag';
     document.getElementById('estMultiplierHint').innerText = `💡 ${intra.label}`;
+    updateCloudButtonState();
 
     const status = document.getElementById('syncStatus');
     const btn = document.getElementById('btnSync');
@@ -704,27 +712,47 @@
     status.style.color = 'var(--yellow)';
     status.innerText = '📡 正在同步盤中即時成交價、計算動態預估量與 5 關審核軌跡...';
 
+    // 【第一順位】走您的 Google Apps Script 雲端光速併發通道 (自動帶入 ?ids= 自選股清單)
     if (GOOGLE_API_URL && GOOGLE_API_URL.startsWith('https://')) {
       try {
-        const res = await fetch(GOOGLE_API_URL);
+        const idsParam = STOCKS.map(s => encodeURIComponent(s.id)).join(',');
+        const separator = GOOGLE_API_URL.includes('?') ? '&' : '?';
+        const res = await fetch(`${GOOGLE_API_URL}${separator}ids=${idsParam}`);
         const data = await res.json();
-        if (data.stocks && data.stocks.length) {
-          data.stocks.forEach((remote, idx) => {
-            if (STOCKS[idx]) Object.assign(STOCKS[idx], remote);
-            evaluateAgentRules(STOCKS[idx]);
+
+        if (data.stocks && data.stocks.length > 0) {
+          let matchCount = 0;
+          data.stocks.forEach(remote => {
+            // 依據股票代號 ID 精準對號入座，並保留使用者在畫面自訂的中文名稱與題材
+            const localStock = STOCKS.find(s => String(s.id) === String(remote.id));
+            if (localStock) {
+              const keepName = (localStock.name && !localStock.name.startsWith('台股 ')) ? localStock.name : remote.name;
+              const keepSector = (localStock.sector && localStock.sector !== '自選盤中監控') ? localStock.sector : remote.sector;
+              Object.assign(localStock, remote, { name: keepName, sector: keepSector });
+              evaluateAgentRules(localStock);
+              runHistoricalBacktest(localStock);
+              matchCount++;
+            }
           });
+          if (data.phaseLabel) {
+            document.getElementById('estMultiplierHint').innerText = `💡 ${data.phaseLabel}`;
+          }
+          saveStocksToLocal();
           renderAll();
           status.style.color = 'var(--green)';
-          status.innerText = `✅ 已於 ${data.updatedAt} 由您的 Google 雲端發射台完成 100% 即時同步`;
+          status.innerText = `✅ 已於 ${data.updatedAt} 由 Google 雲端光速併發同步 (${matchCount}/${STOCKS.length} 檔完成)`;
           btn.disabled = false;
           return;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Google 雲端連線異常，自動切換備援通道：', e);
+      }
     }
 
+    // 【第二順位】若尚未綁定 Google 雲端，自動走雙跳板 + FinMind 備援
     let ok = 0;
     for (let i = 0; i < STOCKS.length; i++) {
-      if (await fetchLiveStock(STOCKS[i])) ok++;
+      if (await fetchLiveStockFallback(STOCKS[i])) ok++;
       renderAll();
     }
     saveStocksToLocal();
@@ -732,7 +760,7 @@
     status.style.color = 'var(--green)';
     status.innerText = ok > 0
       ? `✅ 已於 ${now} 完成即時報價與預估量更新 (${ok}/${STOCKS.length} 檔完成)`
-      : `✅ 目前顯示收盤基準數據（盤中可點選「⏱️ 30秒自動盯盤」或「✎ 盤中模擬改價」測試突破訊號）`;
+      : `✅ 目前顯示收盤基準數據（建議點選右上角「🔗 綁定雲端」開啟 0.5 秒光速同步）`;
     btn.disabled = false;
   }
 
@@ -758,6 +786,7 @@
     if (url !== null) {
       GOOGLE_API_URL = url.trim();
       localStorage.setItem('GAS_WAR_ROOM_URL', GOOGLE_API_URL);
+      updateCloudButtonState();
       if (GOOGLE_API_URL) syncAllStocks();
     }
   }
@@ -914,6 +943,7 @@
   window.onload = () => {
     const intra = getTaiwanIntradayInfo();
     document.getElementById('estMultiplierHint').innerText = `💡 ${intra.label}`;
+    updateCloudButtonState();
     STOCKS.forEach(s => { evaluateAgentRules(s); runHistoricalBacktest(s); });
     renderAll();
     syncAllStocks();
