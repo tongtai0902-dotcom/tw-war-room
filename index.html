@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>GEMINI QUANT | 可視化 AI Agent 台股決策軌跡戰情室</title>
+<title>GEMINI QUANT | 台股盤中即時 AI Agent 戰情室</title>
 <style>
   :root {
     --bg: #06080d; --panel: #0d111a; --panel-2: #131926; --border: #1e2738;
@@ -11,16 +11,23 @@
     --yellow: #ffb800; --purple: #b388ff; --text: #eef2f6; --muted: #7d8da6;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; }
-  body { background: var(--bg); color: var(--text); padding: 10px; max-width: 1220px; margin: 0 auto; line-height: 1.45; }
+  body { background: var(--bg); color: var(--text); padding: 10px; max-width: 1240px; margin: 0 auto; line-height: 1.45; }
 
   /* 頂部控制列 */
   .top-bar {
     display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
     background: linear-gradient(90deg, #190a19 0%, #0d121d 55%, #09192b 100%);
-    border: 2px solid var(--pink); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; gap: 10px;
+    border: 2px solid var(--pink); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; gap: 10px;
   }
   .brand { font-weight: 900; font-size: 17px; display: flex; align-items: center; gap: 8px; }
   .brand span { color: var(--pink); }
+  .market-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 800;
+    background: rgba(0,229,255,0.15); color: var(--cyan); border: 1px solid var(--cyan);
+  }
+  .market-tag.live { background: rgba(0,245,155,0.2); color: var(--green); border-color: var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
   .ctrl-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .btn {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
@@ -30,6 +37,7 @@
   .btn.active { background: var(--pink); color: #fff; border-color: var(--pink); box-shadow: 0 0 10px rgba(255,42,133,0.4); }
   .btn-cyan { background: var(--cyan); color: #000; border-color: var(--cyan); font-weight: 900; }
   .btn-green { background: rgba(0,245,155,0.15); color: var(--green); border-color: var(--green); font-weight: 800; }
+  .btn-auto-on { background: var(--green); color: #000; border-color: var(--green); font-weight: 900; box-shadow: 0 0 12px rgba(0,245,155,0.5); }
 
   /* 快速新增股票列 */
   .quick-add-bar {
@@ -97,32 +105,36 @@
 </head>
 <body>
 
-  <!-- 頂部導覽與策略模式切換 -->
+  <!-- 頂部導覽與盤中即時控制列 -->
   <div class="top-bar">
     <div>
-      <div class="brand">🤖 GEMINI <span>VISUAL AGENT</span> 台股透明化決策軌跡戰情室</div>
-      <div id="syncStatus" style="font-size:11px;color:var(--green);margin-top:3px;">✅ 已載入自選股與收盤基準數據（可直接在下方新增或刪除股票）</div>
+      <div class="brand">
+        🤖 GEMINI <span>INTRADAY AGENT</span> 台股盤中即時決策戰情室
+        <span id="marketPhaseTag" class="market-tag">盤後收盤模式</span>
+      </div>
+      <div id="syncStatus" style="font-size:11px;color:var(--green);margin-top:3px;">✅ 已就緒：支援盤中 Yahoo 即時報價 + 動態預估量比換算</div>
     </div>
     <div class="ctrl-group">
       <button class="btn active" id="modeShort" onclick="setStrategyMode('short')">⚡ 短線突破 Agent</button>
       <button class="btn" id="modeSwing" onclick="setStrategyMode('swing')">🌊 波段趨勢 Agent</button>
-      <button class="btn" onclick="manualEditPrice()">✎ 手動改價</button>
+      <button class="btn" id="btnAutoRefresh" onclick="toggleAutoRefresh()">⏱️ 開啟盤中 30秒自動盯盤</button>
+      <button class="btn" onclick="manualEditPrice()">✎ 盤中模擬改價</button>
       <button class="btn" onclick="bindGoogleUrl()">🔗 綁定雲端</button>
-      <button class="btn btn-cyan" id="btnSync" onclick="syncAllStocks()">🔄 立即連線更新股價</button>
+      <button class="btn btn-cyan" id="btnSync" onclick="syncAllStocks()">🔄 立即抓取即時報價</button>
     </div>
   </div>
 
   <!-- ➕ 免改程式碼：畫面上直接新增/管理股票列 -->
   <div class="quick-add-bar">
     <div class="add-inputs">
-      <span style="font-size:12px;font-weight:bold;color:var(--cyan);">➕ 快速新增監控台股：</span>
+      <span style="font-size:12px;font-weight:bold;color:var(--cyan);">➕ 快速新增盤中監控台股：</span>
       <input type="text" id="newStockId" class="input-box" style="width:90px;" placeholder="代號 (如 2317)">
       <input type="text" id="newStockName" class="input-box" style="width:110px;" placeholder="名稱 (如 鴻海)">
       <input type="text" id="newStockSector" class="input-box" style="width:140px;" placeholder="題材 (選填，如 AI伺服器)">
       <button class="btn btn-green" onclick="addStockFromUI()">➕ 立即加入並抓價</button>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
-      <span style="font-size:11px;color:var(--muted);">💡 清單自動保存在此裝置瀏覽器</span>
+      <span style="font-size:11px;color:var(--muted);" id="estMultiplierHint">💡 預估量引擎待命中</span>
       <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="resetDefaultStocks()">↺ 恢復預設 6 檔</button>
     </div>
   </div>
@@ -130,7 +142,7 @@
   <!-- 主戰情區：左側 K 線與均線結構 / 右側候選股總覽表 -->
   <div class="tier-box">
     <div class="tier-header">
-      <span class="tier-title" id="radarTitle">TIER 1 · 視覺化選股雷達 — 目前模式：⚡ 短線突破策略 (重 5MA、量比、突破頸線、防隔日沖)</span>
+      <span class="tier-title" id="radarTitle">TIER 1 · 盤中即時選股雷達 — 目前模式：⚡ 短線突破策略 (含盤中動態預估量校正)</span>
       <span id="passSummary" style="font-size:11px;color:var(--pink);font-weight:bold;">--</span>
     </div>
 
@@ -156,23 +168,23 @@
         <canvas id="kCanvas" height="170"></canvas>
 
         <div class="metrics-grid">
-          <div class="m-card"><small>突破進場價</small><strong style="color:var(--cyan);" id="stEntry">--</strong></div>
-          <div class="m-card"><small>停損防守價</small><strong style="color:var(--red);" id="stStop">--</strong></div>
-          <div class="m-card"><small>目標停利價</small><strong style="color:var(--green);" id="stTarget">--</strong></div>
-          <div class="m-card"><small>法人籌碼動向</small><strong style="color:var(--yellow);" id="stInst">--</strong></div>
+          <div class="m-card"><small>突破進場觸發價</small><strong style="color:var(--cyan);" id="stEntry">--</strong></div>
+          <div class="m-card"><small>盤中停損防守價</small><strong style="color:var(--red);" id="stStop">--</strong></div>
+          <div class="m-card"><small>波段目標停利價</small><strong style="color:var(--green);" id="stTarget">--</strong></div>
+          <div class="m-card"><small>盤中價位狀態</small><strong style="color:var(--yellow);" id="stIntradaySignal">--</strong></div>
         </div>
       </div>
 
-      <!-- 右欄：監控名單 (含單筆刪除按鈕) 與風控計算機 -->
+      <!-- 右欄：監控名單 (含預估量比與單筆刪除按鈕) -->
       <div>
         <table class="stock-table">
           <thead>
             <tr>
               <th>標的</th>
-              <th>最新價 (漲跌)</th>
-              <th>均線結構</th>
-              <th>量比 / 成交量</th>
-              <th>Agent 判定與主因</th>
+              <th>即時價 (漲跌)</th>
+              <th>盘中位置 / 均線</th>
+              <th>預估量比 (現量)</th>
+              <th>Agent 即時判定</th>
               <th style="text-align:center;">移除</th>
             </tr>
           </thead>
@@ -183,7 +195,7 @@
         <div style="margin-top:10px;background:var(--panel-2);padding:8px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px;">
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
             <div>
-              <span style="color:var(--yellow);font-weight:bold;">🛡️ 風控部位試算：</span>
+              <span style="color:var(--yellow);font-weight:bold;">🛡️ 盤中下單風控試算：</span>
               本金 <input type="number" id="capInput" class="calc-input" value="300000" oninput="updateCalc()"> 元
               ｜單筆風險 <input type="number" id="riskInput" class="calc-input" style="width:48px;" value="2" oninput="updateCalc()"> %
             </div>
@@ -198,12 +210,12 @@
   <div class="grid-bottom">
     <div class="tier-box">
       <div class="tier-header">
-        <span class="tier-title">🔍 TIER 2 · AI Agent 逐條篩選執行日誌 (Audit Trail — 為什麼通過？哪一關沒過被剔除？)</span>
+        <span class="tier-title">🔍 TIER 2 · AI Agent 盤中即時審核日誌 (Audit Trail — 含動態預估量與即時觸價檢核)</span>
         <span id="auditBadge" class="badge badge-pass">PASS</span>
       </div>
       <div id="auditList"></div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted);background:#090c14;padding:8px;border-radius:6px;">
-        💡 <strong>Agent 決策總結：</strong><span id="auditSummary" style="color:#eef2f6;">--</span>
+        💡 <strong>Agent 盤中實戰指令：</strong><span id="auditSummary" style="color:#eef2f6;">--</span>
       </div>
     </div>
 
@@ -228,14 +240,43 @@
   let GOOGLE_API_URL = localStorage.getItem('GAS_WAR_ROOM_URL') || '';
   let strategyMode = 'short';
   let currentIdx = 0;
+  let autoTimer = null;
+  let countdownSec = 30;
+
+  // 計算台股盤中時間權重與預估量乘數 (09:00 ~ 13:30 共 270 分鐘)
+  function getTaiwanIntradayInfo() {
+    const now = new Date();
+    const twTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const day = twTime.getDay();
+    const mins = twTime.getHours() * 60 + twTime.getMinutes();
+    const openMins = 9 * 60;       // 09:00
+    const closeMins = 13 * 60 + 30; // 13:30
+
+    const isWeekday = day >= 1 && day <= 5;
+    const isIntraday = isWeekday && mins >= openMins && mins <= closeMins;
+
+    if (!isIntraday) {
+      return { isIntraday: false, multiplier: 1.0, label: '盤後收盤數據 (1:1 實際成交量)' };
+    }
+    const elapsed = Math.max(mins - openMins, 5); // 避免剛開盤前5分鐘乘數無限大
+    // 早盤前 30 分鐘通常成交量較集中，採用平滑權重公式估算全場總量
+    const rawRatio = 270 / elapsed;
+    const smoothMultiplier = Number(Math.min(Math.max(rawRatio * 0.82, 1.0), 12.0).toFixed(2));
+    return {
+      isIntraday: true,
+      elapsedMins: elapsed,
+      multiplier: smoothMultiplier,
+      label: `🟢 台股盤中即時交易中 (開盤 ${elapsed} 分鐘｜預估量放大權重 ×${smoothMultiplier})`
+    };
+  }
 
   // 預設 6 檔核心名單基準庫
   const DEFAULT_STOCKS = [
     {
       id: '2454', symbol: '2454.TW', name: '聯發科', sector: 'IC設計 · 權值核心',
       price: 4120.0, change: 7.01, ma5: 3965.0, ma20: 3890.0, ma60: 3760.0,
-      volRatio: 2.1, lots: 15475, high20: 4180.0, upperWickPct: 2.71, bias20: 5.91,
-      entry: 4185.0, stop: 3960.0, target: 4680.0, instDefault: '外資投信齊買 +4,120張', instNet: 4120,
+      volRatio: 2.1, estLots: 15475, lots: 15475, high20: 4180.0, upperWickPct: 2.71, bias20: 5.91,
+      entry: 4150.0, stop: 3960.0, target: 4680.0, instDefault: '外資投信齊買 +4,120張', instNet: 4120,
       history: [
         {date:'11/02',o:3780,h:3820,l:3760,c:3800,v:6200000},{date:'11/03',o:3810,h:3850,l:3790,c:3835,v:6800000},
         {date:'11/04',o:3840,h:3890,l:3820,c:3870,v:7100000},{date:'11/05',o:3860,h:3910,l:3840,c:3895,v:7300000},
@@ -247,8 +288,8 @@
     {
       id: '8996', symbol: '8996.TW', name: '高力', sector: '液冷散熱 · 強勢題材',
       price: 1440.0, change: 1.05, ma5: 1428.0, ma20: 1385.0, ma60: 1310.0,
-      volRatio: 2.4, lots: 8920, high20: 1550.0, upperWickPct: 7.64, bias20: 3.97,
-      entry: 1495.0, stop: 1405.0, target: 1690.0, instDefault: '隔日沖調節 / 留長上影', instNet: -380,
+      volRatio: 2.4, estLots: 8920, lots: 8920, high20: 1550.0, upperWickPct: 7.64, bias20: 3.97,
+      entry: 1465.0, stop: 1405.0, target: 1690.0, instDefault: '隔日沖調節 / 留長上影', instNet: -380,
       history: [
         {date:'11/02',o:1340,h:1365,l:1330,c:1355,v:3100000},{date:'11/03',o:1360,h:1390,l:1350,c:1380,v:3500000},
         {date:'11/04',o:1385,h:1410,l:1370,c:1395,v:3800000},{date:'11/05',o:1390,h:1430,l:1385,c:1420,v:4200000},
@@ -260,8 +301,8 @@
     {
       id: '1504', symbol: '1504.TW', name: '東元', sector: '重電節能 · 法人認養',
       price: 64.8, change: 2.69, ma5: 63.4, ma20: 62.1, ma60: 59.8,
-      volRatio: 1.7, lots: 14250, high20: 65.2, upperWickPct: 0.92, bias20: 4.35,
-      entry: 65.3, stop: 62.5, target: 71.5, instDefault: '三大法人買超 +3,280張', instNet: 3280,
+      volRatio: 1.7, estLots: 14250, lots: 14250, high20: 65.2, upperWickPct: 0.92, bias20: 4.35,
+      entry: 64.5, stop: 62.5, target: 71.5, instDefault: '三大法人買超 +3,280張', instNet: 3280,
       history: [
         {date:'11/02',o:60.5,h:61.2,l:60.1,c:60.8,v:7200000},{date:'11/03',o:61.0,h:61.8,l:60.8,c:61.5,v:7800000},
         {date:'11/04',o:61.6,h:62.5,l:61.3,c:62.2,v:8100000},{date:'11/05',o:62.1,h:63.0,l:61.9,c:62.6,v:8500000},
@@ -273,8 +314,8 @@
     {
       id: '2367', symbol: '2367.TW', name: '燿華', sector: '低軌衛星 · PCB',
       price: 40.3, change: 4.00, ma5: 39.1, ma20: 38.4, ma60: 36.9,
-      volRatio: 1.9, lots: 7697, high20: 40.8, upperWickPct: 1.24, bias20: 4.95,
-      entry: 40.8, stop: 38.6, target: 45.6, instDefault: '外資轉買 +1,850張', instNet: 1850,
+      volRatio: 1.9, estLots: 7697, lots: 7697, high20: 40.8, upperWickPct: 1.24, bias20: 4.95,
+      entry: 40.2, stop: 38.6, target: 45.6, instDefault: '外資轉買 +1,850張', instNet: 1850,
       history: [
         {date:'11/02',o:37.2,h:37.8,l:37.0,c:37.5,v:3600000},{date:'11/03',o:37.6,h:38.2,l:37.4,c:38.0,v:3800000},
         {date:'11/04',o:38.1,h:38.6,l:37.8,c:38.3,v:4100000},{date:'11/05',o:38.3,h:38.9,l:38.0,c:38.6,v:4200000},
@@ -286,8 +327,8 @@
     {
       id: '6770', symbol: '6770.TW', name: '力積電', sector: '晶圓代工 · 爆量轉強',
       price: 57.0, change: 1.60, ma5: 55.8, ma20: 53.6, ma60: 50.2,
-      volRatio: 2.3, lots: 66042, high20: 57.8, upperWickPct: 1.40, bias20: 6.34,
-      entry: 57.8, stop: 54.8, target: 64.4, instDefault: '外資大買 +28,450張', instNet: 28450,
+      volRatio: 2.3, estLots: 66042, lots: 66042, high20: 57.8, upperWickPct: 1.40, bias20: 6.34,
+      entry: 56.8, stop: 54.8, target: 64.4, instDefault: '外資大買 +28,450張', instNet: 28450,
       history: [
         {date:'11/02',o:51.5,h:52.4,l:51.2,c:52.0,v:22000000},{date:'11/03',o:52.2,h:53.1,l:51.9,c:52.8,v:24000000},
         {date:'11/04',o:53.0,h:54.0,l:52.6,c:53.5,v:26000000},{date:'11/05',o:53.6,h:54.8,l:53.2,c:54.2,v:28000000},
@@ -299,7 +340,7 @@
     {
       id: '6283', symbol: '6283.TW', name: '淳安', sector: '車用鏡頭 · 底部觀察',
       price: 17.5, change: 0.00, ma5: 17.55, ma20: 17.4, ma60: 17.1,
-      volRatio: 0.4, lots: 84, high20: 18.2, upperWickPct: 0.57, bias20: 0.57,
+      volRatio: 0.4, estLots: 84, lots: 84, high20: 18.2, upperWickPct: 0.57, bias20: 0.57,
       entry: 17.9, stop: 17.1, target: 19.7, instDefault: '外資觀望 0張', instNet: 0,
       history: [
         {date:'11/02',o:17.2,h:17.4,l:17.1,c:17.3,v:180000},{date:'11/03',o:17.3,h:17.5,l:17.2,c:17.4,v:190000},
@@ -311,12 +352,11 @@
     }
   ];
 
-  // 從瀏覽器記憶讀取自選清單，若無則載入預設 6 檔
   let STOCKS = loadSavedStocks();
 
   function loadSavedStocks() {
     try {
-      const saved = localStorage.getItem('MY_AGENT_STOCKS_V1');
+      const saved = localStorage.getItem('MY_AGENT_STOCKS_V2');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -326,16 +366,37 @@
   }
 
   function saveStocksToLocal() {
-    try {
-      localStorage.setItem('MY_AGENT_STOCKS_V1', JSON.stringify(STOCKS));
-    } catch (e) {}
+    try { localStorage.setItem('MY_AGENT_STOCKS_V2', JSON.stringify(STOCKS)); } catch (e) {}
   }
 
-  // ➕ 畫面上直接新增股票並自動抓取真實 K 線與均線
+  // ⏱️ 切換盤中 30 秒自動刷新盯盤模式
+  function toggleAutoRefresh() {
+    const btn = document.getElementById('btnAutoRefresh');
+    if (autoTimer) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+      btn.className = 'btn';
+      btn.innerText = '⏱️ 開啟盤中 30秒自動盯盤';
+      return;
+    }
+    countdownSec = 30;
+    btn.className = 'btn btn-auto-on';
+    syncAllStocks();
+    autoTimer = setInterval(() => {
+      countdownSec--;
+      if (countdownSec <= 0) {
+        countdownSec = 30;
+        syncAllStocks();
+      }
+      btn.innerText = `🟢 盤中自動盯盤中 (${countdownSec}s 更新)`;
+    }, 1000);
+  }
+
+  // ➕ 畫面上直接新增股票並自動抓取即時報價
   async function addStockFromUI() {
     const idInput = document.getElementById('newStockId').value.trim();
     const nameInput = document.getElementById('newStockName').value.trim();
-    const sectorInput = document.getElementById('newStockSector').value.trim() || '自選題材監控';
+    const sectorInput = document.getElementById('newStockSector').value.trim() || '自選盤中監控';
 
     if (!/^\d{4,6}$/.test(idInput)) {
       alert('請輸入正確的 4~6 碼台股代號（例如：2317 或 3324）！');
@@ -347,13 +408,10 @@
     }
 
     const newStock = {
-      id: idInput,
-      symbol: `${idInput}.TW`,
-      name: nameInput || `台股 ${idInput}`,
-      sector: sectorInput,
+      id: idInput, symbol: `${idInput}.TW`, name: nameInput || `台股 ${idInput}`, sector: sectorInput,
       price: 100, change: 0, ma5: 100, ma20: 100, ma60: 100,
-      volRatio: 1.0, lots: 1000, high20: 102, upperWickPct: 0.5, bias20: 0.5,
-      entry: 101, stop: 97, target: 108, instDefault: '連線讀取籌碼中...', instNet: 100,
+      volRatio: 1.0, estLots: 1000, lots: 1000, high20: 102, upperWickPct: 0.5, bias20: 0.5,
+      entry: 101, stop: 97, target: 108, instDefault: '連線讀取中...', instNet: 100,
       history: Array.from({length: 10}, (_, i) => ({ date: `T-${9-i}`, o: 100, h: 101, l: 99, c: 100, v: 1000000 }))
     };
 
@@ -368,107 +426,104 @@
     document.getElementById('newStockName').value = '';
     document.getElementById('newStockSector').value = '';
 
-    const status = document.getElementById('syncStatus');
-    status.style.color = 'var(--yellow)';
-    status.innerText = `⏳ 正在上網抓取新標的【${newStock.id} ${newStock.name}】之 60 日 K 線與均線結構...`;
-
-    const ok = await fetchLiveStock(newStock);
+    await fetchLiveStock(newStock);
     saveStocksToLocal();
     renderAll();
-
-    if (ok) {
-      status.style.color = 'var(--green)';
-      status.innerText = `✅ 已成功新增【${newStock.id} ${newStock.name}】並同步最新收盤與 5 關審核軌跡！`;
-    } else {
-      status.style.color = 'var(--pink)';
-      status.innerText = `⚠️ 已新增【${newStock.id} ${newStock.name}】，您可點選右上角「✎ 手動改價」輸入最新價格測試！`;
-    }
   }
 
-  // 🗑️ 從畫面直接刪除單一股票
   function removeStock(idx, event) {
     event.stopPropagation();
-    if (STOCKS.length <= 1) {
-      alert('至少需保留 1 檔監控股票！');
-      return;
-    }
-    const target = STOCKS[idx];
-    if (!confirm(`確定要從戰情室移除【${target.id} ${target.name}】嗎？`)) return;
-
+    if (STOCKS.length <= 1) return alert('至少需保留 1 檔監控股票！');
+    if (!confirm(`確定要從戰情室移除【${STOCKS[idx].id} ${STOCKS[idx].name}】嗎？`)) return;
     STOCKS.splice(idx, 1);
     if (currentIdx >= STOCKS.length) currentIdx = 0;
     saveStocksToLocal();
     renderAll();
   }
 
-  // ↺ 一鍵恢復預設 6 檔名單
   function resetDefaultStocks() {
-    if (!confirm('確定要清除自訂修改，恢復成預設的 6 檔核心名單（聯發科、高力、東元、燿華、力積電、淳安）嗎？')) return;
-    localStorage.removeItem('MY_AGENT_STOCKS_V1');
+    if (!confirm('確定要恢復成預設的 6 檔核心名單嗎？')) return;
+    localStorage.removeItem('MY_AGENT_STOCKS_V2');
     STOCKS = JSON.parse(JSON.stringify(DEFAULT_STOCKS));
     currentIdx = 0;
     STOCKS.forEach(s => { evaluateAgentRules(s); runHistoricalBacktest(s); });
     renderAll();
   }
 
-  // AI Agent 逐條篩選與剔除理由產生器 (Audit Trail)
+  // AI Agent 盤中即時 5 關審核與觸價訊號引擎
   function evaluateAgentRules(s) {
+    const intra = getTaiwanIntradayInfo();
+    const estLots = s.estLots || s.lots;
     const steps = [];
+
+    // 判斷盤中即時價位訊號
+    if (s.price >= s.entry) {
+      s.intradaySignal = `🔥 已突破進場價 (${s.entry})`;
+    } else if (s.price <= s.stop) {
+      s.intradaySignal = `🚨 跌破防守價 (${s.stop})`;
+    } else if (s.price >= s.entry * 0.99) {
+      s.intradaySignal = `⚡ 逼近突破點 (差 ${((s.entry - s.price)/s.price*100).toFixed(1)}%)`;
+    } else {
+      s.intradaySignal = `👀 區間整理觀察中`;
+    }
+
     if (strategyMode === 'short') {
       const c1 = s.price >= s.ma5;
       steps.push({
-        name: 'Step 1 · 短線均線趨勢 (站上 5MA)',
+        name: 'Step 1 · 盤中即時均線位置 (現價 ≥ 5MA)',
         pass: c1,
-        detail: c1 ? `收盤 ${s.price} 穩居 5MA (${s.ma5}) 之上，短多動能維持` : `【剔除理由】收盤 ${s.price} 低於 5MA (${s.ma5})，短線動能轉弱先剔除`
+        detail: c1 ? `即時價 ${s.price} 穩守 5MA (${s.ma5}) 之上，盤中短多掌控` : `【剔除理由】即時價 ${s.price} 跌破 5MA (${s.ma5})，盤中轉弱先剔除`
       });
 
-      const c2 = s.volRatio >= 1.25 || s.change >= 1.5;
+      const c2 = s.volRatio >= 1.25 || s.change >= 1.8;
       steps.push({
-        name: 'Step 2 · 成交量能擴增 (量比 ≥ 1.25x 或帶量紅K)',
+        name: 'Step 2 · 盤中動態預估量能 (預估量比 ≥ 1.25x)',
         pass: c2,
-        detail: c2 ? `今日成交 ${s.lots.toLocaleString()} 張，量比達 ${s.volRatio}x，攻擊量能充沛` : `【剔除理由】今日僅 ${s.lots.toLocaleString()} 張 (量比 ${s.volRatio}x)，量能萎縮缺乏短線爆發力`
+        detail: c2
+          ? `目前成交 ${s.lots.toLocaleString()} 張 (全場預估 ${estLots.toLocaleString()} 張｜預估量比 ${s.volRatio}x)，攻擊量能充沛`
+          : `【剔除理由】預估量比僅 ${s.volRatio}x (現量 ${s.lots.toLocaleString()} 張)，盤中追價買盤不足`
       });
 
-      const nearBreakout = s.price >= s.high20 * 0.96;
+      const nearBreakout = s.price >= s.entry || s.price >= s.high20 * 0.965;
       steps.push({
-        name: 'Step 3 · 突破位置檢核 (接近或突破近期高點頸線)',
+        name: 'Step 3 · 盤中突破觸價檢核 (站上觸發價或逼近前高)',
         pass: nearBreakout,
-        detail: nearBreakout ? `股價逼近近期頸線高點 (${s.high20})，具備突破表態結構` : `【剔除理由】距離前波高點 (${s.high20}) 尚遠，上方壓力待消化`
+        detail: nearBreakout ? `盤中狀態：${s.intradaySignal}，具備短線表態動能` : `【剔除理由】距離突破觸發價 (${s.entry}) 尚遠，等待帶量攻擊訊號`
       });
 
       const instOk = s.instNet > 0 || s.change >= 2.0;
       steps.push({
-        name: 'Step 4 · 法人籌碼配合度 (籌碼動向濾網)',
+        name: 'Step 4 · 法人底氣與盤中強弱度 (漲幅 / 籌碼濾網)',
         pass: instOk,
-        detail: instOk ? `籌碼動向：${s.instDefault}，買盤站在多方` : `【剔除理由】法人籌碼觀望或調節 (${s.instDefault})，缺乏主力推升`
+        detail: instOk ? `盤中漲跌 ${s.change > 0 ? '+' : ''}${s.change}% (${s.instDefault})，多方氣勢明確` : `【剔除理由】盤中走勢偏弱且缺乏法人買盤保護 (${s.instDefault})`
       });
 
       const noTrap = s.upperWickPct < 3.5 && s.bias20 < 12;
       steps.push({
-        name: 'Step 5 · 剔除標準：防隔日沖長上影線 & 乖離過熱',
+        name: 'Step 5 · 盤中防誘多濾網：嚴防衝高回落長上影線',
         pass: noTrap,
-        detail: noTrap ? `上影線 ${s.upperWickPct}%、月線乖離 ${s.bias20}%，無隔日沖拉高出貨跡象` : `【剔除理由】盤中衝高回落留長上影線 (${s.upperWickPct}%)，嚴防隔日沖主力倒貨，予以剔除！`
+        detail: noTrap ? `目前上影線僅 ${s.upperWickPct}%、月線乖離 ${s.bias20}%，無盤中拉高倒貨跡象` : `【剔除理由】盤中衝高回落留長上影線 (${s.upperWickPct}%)，嚴防開高走低誘多，立即剔除！`
       });
     } else {
       const c1 = s.price >= s.ma20 && s.ma20 >= s.ma60 * 0.99;
       steps.push({
-        name: 'Step 1 · 波段均線結構 (站上 20MA 月線且季線支撐)',
+        name: 'Step 1 · 波段均線結構 (即時價站穩 20MA 月線)',
         pass: c1,
-        detail: c1 ? `收盤 ${s.price} > 月線 (${s.ma20}) 且季線 (${s.ma60}) 向上，中期趨勢偏多` : `【剔除理由】股價跌破月線 (${s.ma20}) 或中期均線反壓`
+        detail: c1 ? `即時價 ${s.price} > 月線 (${s.ma20}) 且季線 (${s.ma60}) 向上，波段偏多` : `【剔除理由】即時價跌破月線 (${s.ma20})，中期趨勢受阻`
       });
 
       const c2 = s.ma5 >= s.ma20;
       steps.push({
         name: 'Step 2 · 均線多頭排列檢核 (5MA ≥ 20MA)',
         pass: c2,
-        detail: c2 ? `5MA (${s.ma5}) 高於 20MA (${s.ma20})，短中期均線多頭排列` : `【剔除理由】5MA (${s.ma5}) 落於 20MA (${s.ma20}) 下方，整理尚未結束`
+        detail: c2 ? `5MA (${s.ma5}) 高於 20MA (${s.ma20})，短中期均線多頭排列` : `【剔除理由】5MA (${s.ma5}) 落於 20MA (${s.ma20}) 下方，整理未完`
       });
 
       const c3 = s.volRatio >= 0.8 && s.volRatio <= 3.8;
       steps.push({
-        name: 'Step 3 · 波段量能穩定度 (溫和換手、忌窒息量)',
+        name: 'Step 3 · 波段量能穩定度 (預估量比溫和換手)',
         pass: c3,
-        detail: c3 ? `量比 ${s.volRatio}x (${s.lots.toLocaleString()}張) 屬於健康波段換手量` : `【剔除理由】量比 ${s.volRatio}x 過度萎縮或異常失控，不利波段抱單`
+        detail: c3 ? `預估量比 ${s.volRatio}x 屬於健康波段換手量` : `【剔除理由】預估量比 ${s.volRatio}x 異常失控或窒息，不利波段抱單`
       });
 
       const c4 = s.instNet >= 0;
@@ -490,11 +545,10 @@
     const failedSteps = steps.filter(x => !x.pass);
     s.pass = failedSteps.length === 0 || (failedSteps.length === 1 && steps[4].pass && steps[0].pass && steps[1].pass);
     s.mainReason = s.pass
-      ? `通過 (${5 - failedSteps.length}/5 關)：站穩均線且量能合規`
+      ? `${s.intradaySignal}`
       : failedSteps[failedSteps.length - 1].detail.replace('【剔除理由】', '剔除：').slice(0, 20) + '...';
   }
 
-  // 考量交易成本 (0.55%) 的歷史回測引擎
   function runHistoricalBacktest(s) {
     const hist = s.history || [];
     const COST_PCT = 0.55;
@@ -517,7 +571,6 @@
         if (cumReturn > peak) peak = cumReturn;
         const dd = peak - cumReturn;
         if (dd > maxDd) maxDd = Number(dd.toFixed(2));
-
         logs.unshift(`[${hist[i].date}] 觸發進場 @${entryP} (量比${vr.toFixed(1)}x) ➔ 出場 @${exitP} | 扣0.55%稅費淨損益: ${netPct > 0 ? '+' : ''}${netPct}%`);
       }
     }
@@ -531,31 +584,14 @@
     };
   }
 
-  // 多通道連線更新引擎 (自動支援上市 .TW 與上櫃 .TWO 雙軌探測)
+  // 盤中優先抓取 Yahoo Chart API (包含盤中最新 regularMarketPrice 與當日即時 K 棒)
   async function fetchLiveStock(s) {
-    // 通道 A：FinMind 台灣開源金融 API (不分上市櫃，直接用 4 碼代號抓取)
-    try {
-      const start = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
-      const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${s.id}&start_date=${start}`;
-      const res = await fetch(fmUrl);
-      const json = await res.json();
-      if (json.data && json.data.length >= 10) {
-        const valid = json.data.map(d => ({
-          date: d.date.slice(5).replace('-', '/'),
-          o: Number(d.open), h: Number(d.max), l: Number(d.min), c: Number(d.close), v: Number(d.Trading_Volume)
-        }));
-        applyStockHistory(s, valid);
-        return true;
-      }
-    } catch (e) {}
-
-    // 通道 B：Yahoo Finance 自動雙軌嘗試 (.TW 上市 與 .TWO 上櫃)
     const suffixes = ['.TW', '.TWO'];
     for (let sfx of suffixes) {
       const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${s.id}${sfx}?range=3mo&interval=1d`;
       const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
       ];
       for (let pUrl of proxies) {
         try {
@@ -564,6 +600,7 @@
           const json = await res.json();
           const result = json.chart && json.chart.result && json.chart.result[0];
           if (!result) continue;
+          const meta = result.meta || {};
           const ts = result.timestamp || [];
           const q = result.indicators.quote[0];
           const valid = [];
@@ -579,6 +616,13 @@
             }
           }
           if (valid.length >= 10) {
+            // 若 Yahoo meta 有提供盤中最新即時價，覆蓋最後一根 K 棒收盤價
+            if (meta.regularMarketPrice) {
+              valid[valid.length - 1].c = Number(meta.regularMarketPrice.toFixed(2));
+              if (meta.regularMarketDayHigh) valid[valid.length - 1].h = Number(meta.regularMarketDayHigh.toFixed(2));
+              if (meta.regularMarketDayLow) valid[valid.length - 1].l = Number(meta.regularMarketDayLow.toFixed(2));
+              if (meta.regularMarketVolume) valid[valid.length - 1].v = meta.regularMarketVolume;
+            }
             s.symbol = `${s.id}${sfx}`;
             applyStockHistory(s, valid);
             return true;
@@ -586,37 +630,60 @@
         } catch (e) {}
       }
     }
+
+    // 備援通道：FinMind 歷史日 K
+    try {
+      const start = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
+      const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${s.id}&start_date=${start}`;
+      const res = await fetch(fmUrl);
+      const json = await res.json();
+      if (json.data && json.data.length >= 10) {
+        const valid = json.data.map(d => ({
+          date: d.date.slice(5).replace('-', '/'),
+          o: Number(d.open), h: Number(d.max), l: Number(d.min), c: Number(d.close), v: Number(d.Trading_Volume)
+        }));
+        applyStockHistory(s, valid);
+        return true;
+      }
+    } catch (e) {}
     return false;
   }
 
   function applyStockHistory(s, valid) {
+    const intra = getTaiwanIntradayInfo();
     const lat = valid[valid.length - 1];
     const prv = valid[valid.length - 2];
     const avg = arr => Number((arr.reduce((a, b) => a + b.c, 0) / arr.length).toFixed(2));
+
     s.price = lat.c;
     s.change = Number((((lat.c - prv.c) / prv.c) * 100).toFixed(2));
     s.ma5 = avg(valid.slice(-5));
     s.ma20 = avg(valid.slice(-Math.min(20, valid.length)));
     s.ma60 = avg(valid.slice(-Math.min(60, valid.length)));
-    const avgV = valid.slice(-6, -1).reduce((a, b) => a + b.v, 0) / 5;
-    s.volRatio = avgV > 0 ? Number((lat.v / avgV).toFixed(1)) : 1.0;
+
+    // 關鍵：用前 5 個完整交易日的均量作為分母，並將今日盤中量乘上「時間預估權重」
+    const avgV5 = valid.slice(-6, -1).reduce((a, b) => a + b.v, 0) / 5;
     s.lots = Math.round(lat.v / 1000);
+    s.estLots = Math.round(s.lots * intra.multiplier);
+    const estVol = lat.v * intra.multiplier;
+    s.volRatio = avgV5 > 0 ? Number((estVol / avgV5).toFixed(1)) : 1.0;
+
+    // 突破價以前一日高點與5日高點為基準，使盤中能清楚判斷「是否已突破」
+    const prevHigh5 = Math.max(...valid.slice(-6, -1).map(d => d.h));
     s.high20 = Math.max(...valid.slice(-10).map(d => d.h));
     s.upperWickPct = Number((((lat.h - Math.max(lat.o, lat.c)) / lat.c) * 100).toFixed(2));
     s.bias20 = Number((((lat.c - s.ma20) / s.ma20) * 100).toFixed(2));
-    s.entry = Number(Math.max(lat.h, s.price * 1.005).toFixed(2));
-    s.stop = Number(Math.min(lat.l, s.ma5 * 0.985, s.entry * 0.968).toFixed(2));
+
+    s.entry = Number((prevHigh5 * 1.002).toFixed(2));
+    s.stop = Number(Math.min(lat.l, s.ma5 * 0.985, s.price * 0.968).toFixed(2));
     s.target = Number((s.entry + Math.max(s.entry - s.stop, s.entry * 0.02) * 2.2).toFixed(2));
 
     if (s.change >= 2.0 && s.volRatio >= 1.3) {
-      s.instNet = Math.round(s.lots * 0.16);
-      s.instDefault = `主力偏多約 +${s.instNet.toLocaleString()}張`;
+      s.instNet = Math.round(s.estLots * 0.16);
+      s.instDefault = `盤中大單偏多 (預估 +${s.instNet.toLocaleString()}張)`;
     } else if (s.change <= -1.5) {
-      s.instNet = -Math.round(s.lots * 0.12);
-      s.instDefault = `法人調節約 ${s.instNet.toLocaleString()}張`;
-    } else {
-      s.instNet = 100;
-      s.instDefault = `籌碼中性換手`;
+      s.instNet = -Math.round(s.estLots * 0.12);
+      s.instDefault = `盤中賣壓調節 (${s.instNet.toLocaleString()}張)`;
     }
 
     s.history = valid.slice(-30);
@@ -625,11 +692,35 @@
   }
 
   async function syncAllStocks() {
+    const intra = getTaiwanIntradayInfo();
+    const phaseTag = document.getElementById('marketPhaseTag');
+    phaseTag.innerText = intra.isIntraday ? '🟢 盤中即時雷達連線中' : '🌙 盤後收盤基準模式';
+    phaseTag.className = intra.isIntraday ? 'market-tag live' : 'market-tag';
+    document.getElementById('estMultiplierHint').innerText = `💡 ${intra.label}`;
+
     const status = document.getElementById('syncStatus');
     const btn = document.getElementById('btnSync');
     btn.disabled = true;
     status.style.color = 'var(--yellow)';
-    status.innerText = '📡 正在透過多通道 API (Google 雲端 / FinMind / Yahoo) 同步最新股價...';
+    status.innerText = '📡 正在同步盤中即時成交價、計算動態預估量與 5 關審核軌跡...';
+
+    if (GOOGLE_API_URL && GOOGLE_API_URL.startsWith('https://')) {
+      try {
+        const res = await fetch(GOOGLE_API_URL);
+        const data = await res.json();
+        if (data.stocks && data.stocks.length) {
+          data.stocks.forEach((remote, idx) => {
+            if (STOCKS[idx]) Object.assign(STOCKS[idx], remote);
+            evaluateAgentRules(STOCKS[idx]);
+          });
+          renderAll();
+          status.style.color = 'var(--green)';
+          status.innerText = `✅ 已於 ${data.updatedAt} 由您的 Google 雲端發射台完成 100% 即時同步`;
+          btn.disabled = false;
+          return;
+        }
+      } catch (e) {}
+    }
 
     let ok = 0;
     for (let i = 0; i < STOCKS.length; i++) {
@@ -640,14 +731,14 @@
     const now = new Date().toLocaleTimeString('zh-TW', { hour12: false });
     status.style.color = 'var(--green)';
     status.innerText = ok > 0
-      ? `✅ 已於 ${now} 連線更新最新市場收盤數據 (${ok}/${STOCKS.length} 檔完成)`
-      : `✅ 目前顯示收盤基準數據（可隨時在上方新增股票或點選「✎ 手動改價」測試）`;
+      ? `✅ 已於 ${now} 完成即時報價與預估量更新 (${ok}/${STOCKS.length} 檔完成)`
+      : `✅ 目前顯示收盤基準數據（盤中可點選「⏱️ 30秒自動盯盤」或「✎ 盤中模擬改價」測試突破訊號）`;
     btn.disabled = false;
   }
 
   function manualEditPrice() {
     const s = STOCKS[currentIdx];
-    const input = prompt(`請輸入【${s.id} ${s.name}】欲測試之最新成交價：`, s.price);
+    const input = prompt(`【盤中模擬測試】請輸入【${s.id} ${s.name}】盤中最新跳動成交價：\n(目前突破觸發價為 ${s.entry}、防守價為 ${s.stop})`, s.price);
     if (!input) return;
     const newP = parseFloat(input);
     if (isNaN(newP) || newP <= 0) return;
@@ -657,9 +748,6 @@
     s.history[s.history.length - 1].c = newP;
     if (newP > s.history[s.history.length - 1].h) s.history[s.history.length - 1].h = newP;
     s.upperWickPct = Number((((s.history[s.history.length - 1].h - newP) / newP) * 100).toFixed(2));
-    s.entry = Number((newP * 1.01).toFixed(2));
-    s.stop = Number((newP * 0.97).toFixed(2));
-    s.target = Number((newP * 1.07).toFixed(2));
     evaluateAgentRules(s);
     saveStocksToLocal();
     renderAll();
@@ -679,26 +767,25 @@
     document.getElementById('modeShort').classList.toggle('active', mode === 'short');
     document.getElementById('modeSwing').classList.toggle('active', mode === 'swing');
     document.getElementById('radarTitle').innerText = mode === 'short'
-      ? 'TIER 1 · 視覺化選股雷達 — 目前模式：⚡ 短線突破策略 (重 5MA、量比、突破頸線、防隔日沖)'
-      : 'TIER 1 · 視覺化選股雷達 — 目前模式：🌊 波段趨勢策略 (重 5/20/60MA 多頭排列、低乖離安全邊際)';
+      ? 'TIER 1 · 盤中即時選股雷達 — 目前模式：⚡ 短線突破策略 (含盤中動態預估量校正)'
+      : 'TIER 1 · 盤中即時選股雷達 — 目前模式：🌊 波段趨勢策略 (重 5/20/60MA 多頭排列、低乖離安全邊際)';
     STOCKS.forEach(s => { evaluateAgentRules(s); runHistoricalBacktest(s); });
     renderAll();
   }
 
   function renderAll() {
     const passCount = STOCKS.filter(s => s.pass).length;
-    document.getElementById('passSummary').innerText = `Agent 篩選結果：${passCount} 檔 PASS / ${STOCKS.length - passCount} 檔被剔除 (DROP)`;
+    document.getElementById('passSummary').innerText = `Agent 即時篩選：${passCount} 檔 PASS / ${STOCKS.length - passCount} 檔剔除 (DROP)`;
 
     document.getElementById('stockTbody').innerHTML = STOCKS.map((s, idx) => {
       const sign = s.change > 0 ? '+' : '';
       const pCol = s.change >= 0 ? 'price-up' : 'price-down';
-      const maStatus = (s.price >= s.ma5 && s.ma5 >= s.ma20) ? '🔥 三線多頭' : (s.price >= s.ma20 ? '📈 守穩月線' : '⚠️ 均線整理');
       return `
         <tr class="${idx === currentIdx ? 'selected' : ''}" onclick="selectStock(${idx})">
           <td><strong>${s.id}</strong> ${s.name}</td>
           <td class="${pCol}"><strong>${s.price}</strong> (${sign}${s.change}%)</td>
-          <td style="font-size:11px;color:var(--cyan);">${maStatus}</td>
-          <td style="font-size:11px;color:var(--muted);">${s.volRatio}x (${s.lots.toLocaleString()}張)</td>
+          <td style="font-size:11px;color:var(--cyan);">${s.intradaySignal || '站穩均線'}</td>
+          <td style="font-size:11px;color:var(--muted);"><strong>${s.volRatio}x</strong> (${s.lots.toLocaleString()}張)</td>
           <td>
             <span class="badge ${s.pass ? 'badge-pass' : 'badge-drop'}">${s.pass ? 'PASS' : 'DROP'}</span>
             <div style="font-size:10px;color:var(--muted);margin-top:2px;">${s.mainReason}</div>
@@ -725,7 +812,7 @@
     pEl.innerText = s.price;
     pEl.className = s.change >= 0 ? 'price-up' : 'price-down';
     const cEl = document.getElementById('stChange');
-    cEl.innerText = `${s.change > 0 ? '+' : ''}${s.change}% (量比 ${s.volRatio}x)`;
+    cEl.innerText = `${s.change > 0 ? '+' : ''}${s.change}% (預估量比 ${s.volRatio}x)`;
     cEl.className = s.change >= 0 ? 'price-up' : 'price-down';
 
     document.getElementById('valMa5').innerText = s.ma5;
@@ -735,10 +822,10 @@
     document.getElementById('stEntry').innerText = s.entry;
     document.getElementById('stStop').innerText = s.stop;
     document.getElementById('stTarget').innerText = s.target;
-    document.getElementById('stInst').innerText = s.instDefault;
+    document.getElementById('stIntradaySignal').innerText = s.intradaySignal || '--';
 
     const bEl = document.getElementById('auditBadge');
-    bEl.innerText = s.pass ? 'FINAL: PASS (列入候選)' : 'FINAL: DROP (條件剔除)';
+    bEl.innerText = s.pass ? 'FINAL: PASS (盤中合規)' : 'FINAL: DROP (條件剔除)';
     bEl.className = `badge ${s.pass ? 'badge-pass' : 'badge-drop'}`;
 
     document.getElementById('auditList').innerHTML = (s.auditSteps || []).map(st => `
@@ -752,8 +839,8 @@
     `).join('');
 
     document.getElementById('auditSummary').innerText = s.pass
-      ? `【${s.id} ${s.name}】通過 ${strategyMode === 'short' ? '短線突破' : '波段趨勢'} Agent 審核！觀察 ${s.entry} 突破力道，若跌破 ${s.stop} 則嚴格執行停損。`
-      : `【${s.id} ${s.name}】未通過本次篩選（原因如上列紅框所示），建議先觀望等待條件轉佳。`;
+      ? `【${s.id} ${s.name}】盤中狀態：${s.intradaySignal}！預估量比達 ${s.volRatio}x，若盤中站穩 ${s.entry} 可依風控部位試單，跌破 ${s.stop} 嚴格停損。`
+      : `【${s.id} ${s.name}】盤中未通過篩選（原因如上列紅框所示），嚴守紀律不追高、不勉強出手。`;
 
     if (!s.bt) runHistoricalBacktest(s);
     if (s.bt) {
@@ -825,6 +912,8 @@
   }
 
   window.onload = () => {
+    const intra = getTaiwanIntradayInfo();
+    document.getElementById('estMultiplierHint').innerText = `💡 ${intra.label}`;
     STOCKS.forEach(s => { evaluateAgentRules(s); runHistoricalBacktest(s); });
     renderAll();
     syncAllStocks();
